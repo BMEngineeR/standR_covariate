@@ -20,18 +20,12 @@ The published GeoMX WTA data of diabetic kidney disease that we used in the vign
 
 Install the release version from Bioconductor
 
-```
-if (!require("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-
-BiocManager::install("standR")
-```
-
 Install development version from GitHub
 
 ```
 library(devtools)   
 devtools::install_github("BMEngineeR/standR_covariate")
+library(standR_covariate)
 ```
 
 ## Citation
