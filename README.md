@@ -31,7 +31,7 @@ Install development version from GitHub
 
 ```
 library(devtools)   
-devtools::install_github("DavisLaboratory/standR")
+devtools::install_github("BMEngineeR/standR_covariate")
 ```
 
 ## Citation
