@@ -130,6 +130,16 @@ geomxNorm <- function(spe_object, method = c(
   }
 
 
+  ## CPM (plain CPM without additional normalization)
+  if (method == "CPM") {
+    S4Vectors::metadata(spe)$norm.method <- "CPM"
+    if (isTRUE(log)) {
+      assay(spe, "logcounts") <- edgeR::cpm(y, log = TRUE)
+    } else {
+      assay(spe, "logcounts") <- edgeR::cpm(y, log = FALSE)
+    }
+  }
+
   ## calculating size factor based on geomean
 
   if (method == "sizefactor") {

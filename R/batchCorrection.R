@@ -79,7 +79,12 @@ findNCGs <- function(spe, n_assay = 2, batch_name = "SlideName", top_n = 200) {
 #' @param n_assay Integer to indicate the nth count table in the assay(spe) to be used.
 #' @param batch A vector indicating batches. This is required for the Limma method.
 #' @param batch2 A vector indicating the second series of batches. This is specific for the Limma method.
-#' @param covariates A matrix or vector of numeric covariates to be adjusted for.
+#' @param covariates A vector/matrix/data.frame of covariates to adjust for.
+#'   - Limma: passed to `limma::removeBatchEffect` via the `covariates` argument.
+#'   - RUV4: treated as Z (nuisance covariates). If provided, RUV4 will
+#'     (i) residualize when estimating W against both factors of interest and Z,
+#'     and (ii) regress out Z effects from the returned assay. Factors in a
+#'     data.frame are expanded via `model.matrix(~ 0 + .)`.
 #' @param design A design matrix relating to treatment conditions to be preserved, can be generated using `stats::model.matrix` function with all biological factors included.
 #' @param method Can be either RUV4 or Limma or RUVg, by default is RUV4.
 #' @param isLog Logical vector, indicating if the count table is log or not.
@@ -91,7 +96,10 @@ findNCGs <- function(spe, n_assay = 2, batch_name = "SlideName", top_n = 200) {
 #' @references Gagnon-Bartsch, J. A., Jacob, L., & Speed, T. P. (2013). Removing unwanted variation from high dimensional data with negative controls. Berkeley: Tech Reports from Dep Stat Univ California, 1-112.
 #' @references Ritchie, M. E., Phipson, B., Wu, D. I., Hu, Y., Law, C. W., Shi, W., & Smyth, G. K. (2015). limma powers differential expression analyses for RNA-sequencing and microarray studies. Nucleic acids research, 43(7), e47-e47.
 #' 
-#' @note The normalised count is not intended to be used directly for linear modelling. For linear modelling, it is better to include the batch factors/W matrices in the linear model.
+#' @note The normalised count is not intended to be used directly for linear modelling.
+#'   For linear modelling, it is better to include the batch factors/W matrices in the linear model.
+#'   When `covariates` are supplied with method "RUV4", the returned assay additionally has
+#'   those covariate effects regressed out.
 #'
 #' @examples
 #' data("dkd_spe_subset")
@@ -133,11 +141,35 @@ geomxBatchCorrection <- function(spe, k, factors, NCGs, n_assay = 2,
 
     test <- ruv::design.matrix(factorOfInterest)
 
+    # prepare covariates (Z) if provided
+    Z <- NULL
+    if (!is.null(covariates)) {
+      if (is.vector(covariates)) {
+        Z <- matrix(covariates, ncol = 1)
+        rownames(Z) <- colnames(spe)
+      } else if (is.data.frame(covariates)) {
+        # expand factors; no intercept
+        Z <- stats::model.matrix(~ 0 + ., data = covariates)
+        rownames(Z) <- rownames(covariates)
+      } else if (is.matrix(covariates)) {
+        Z <- covariates
+      } else {
+        stop("covariates must be a numeric vector, matrix, or data.frame.")
+      }
+      # reorder rows of Z to match samples in tmat if rownames available
+      if (!is.null(rownames(Z))) {
+        Z <- Z[colnames(spe), , drop = FALSE]
+      } else {
+        rownames(Z) <- colnames(spe)
+      }
+      stopifnot(nrow(Z) == nrow(tmat))
+    }
+
     # run ruv4
     ruv.out <- RUV4_upgrade(tmat,
       test,
       ctl = rownames(spe) %in% NCGs,
-      k = k, Z = NULL
+      k = k, Z = Z
     )
 
     # store results
@@ -145,7 +177,7 @@ geomxBatchCorrection <- function(spe, k, factors, NCGs, n_assay = 2,
       as.data.frame()
     colnames(ruv_w) <- paste0("ruv_W", seq(k))
 
-    for (i in seq(ncol(ruv_w))) {
+    for (i in seq_len(ncol(ruv_w))) {
       n <- colnames(ruv_w)[i]
       colData(spe)[, n] <- ruv_w[, i]
     }
@@ -175,7 +207,7 @@ geomxBatchCorrection <- function(spe, k, factors, NCGs, n_assay = 2,
       as.data.frame()
     colnames(ruv_w) <- paste0("ruv_W", seq(k))
     
-    for (i in seq(ncol(ruv_w))) {
+    for (i in seq_len(ncol(ruv_w))) {
       n <- colnames(ruv_w)[i]
       colData(spe)[, n] <- ruv_w[, i]
     }
